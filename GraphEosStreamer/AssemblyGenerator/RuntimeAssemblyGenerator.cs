@@ -111,14 +111,14 @@ namespace GraphEosStreamer.AssemblyGenerator
             return moduleBuilder.Assembly;
         }
 
-        static void SaveAssemblyAndAbi(Assembly assembly, Abi abi, string contractName, uint blockNum)
+        private static async void SaveAssemblyAndAbi(Assembly assembly, Abi abi, string contractName, uint blockNum)
         {
             var generator = new Lokad.ILPack.AssemblyGenerator();
 
             var path = Path.Combine(AssemblyPath, contractName);
             if (!Directory.Exists(path))
                 Directory.CreateDirectory(path);
-            using (var file = File.CreateText(Path.Combine(path, contractName + "." + blockNum + ".abi.bin")))
+            await using (var file = File.CreateText(Path.Combine(path, contractName + "." + blockNum + ".abi")))
             {
                 var serializer = new JsonSerializer();
                 serializer.Serialize(file, abi);

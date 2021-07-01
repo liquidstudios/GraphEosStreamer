@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Exceptions;
+using Serilog.Sinks.RollingFileAlternative;
 
 namespace GraphEosStreamer
 {
@@ -12,13 +13,19 @@ namespace GraphEosStreamer
         public static void Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
+                .WriteTo.Map(
+                    evt => evt.Level,
+                    (level, wt) => wt.RollingFile("Logs\\" + level + "-{Date}.log"))
+                .CreateLogger();
+
+/*            Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
                 .Enrich.WithExceptionDetails()
                 .WriteTo.Console()
                 .WriteTo.File("log.txt",
                     rollingInterval: RollingInterval.Day,
                     rollOnFileSizeLimit: true)
-                .CreateLogger();
+                .CreateLogger();*/
 
             CreateHostBuilder(args).Build().Run();
         }
