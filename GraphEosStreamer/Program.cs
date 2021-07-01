@@ -13,6 +13,7 @@ namespace GraphEosStreamer
         public static void Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
+                .WriteTo.Console()
                 .WriteTo.Map(
                     evt => evt.Level,
                     (level, wt) => wt.RollingFile("Logs\\" + level + "-{Date}.log"))
@@ -32,12 +33,12 @@ namespace GraphEosStreamer
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
-                /*.ConfigureAppConfiguration((hostingContext, config) =>
+                .ConfigureAppConfiguration((hostingContext, config) =>
                 {
                     config.SetBasePath(Directory.GetCurrentDirectory());
-                    config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                    config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true).Build();
                     config.AddEnvironmentVariables();
-                })*/
+                })
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
                     webBuilder.UseStartup<Startup>();

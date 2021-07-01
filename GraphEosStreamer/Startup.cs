@@ -37,7 +37,8 @@ namespace GraphEosStreamer
         {
 
             services
-                .Configure<Options>(options => Configuration.GetSection("Options").Bind(options))
+                .AddSingleton(Configuration)
+                .Configure<Options>(Configuration.GetSection("Options"))
                 .AddSingleton<BlockReaderService>()
                 .AddHostedService<BlockReaderService>(provider => provider.GetService<BlockReaderService>())
                 .AddHostedService<BlockDeserializerService>()
