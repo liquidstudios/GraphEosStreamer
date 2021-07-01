@@ -12,6 +12,7 @@ using GraphEosStreamer.SHiP;
 using GraphEosStreamer.SHiP.Tables;
 using GraphEosStreamer.SHiP.Variants;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using Salar.BinaryBuffers;
 using Serilog;
 
 namespace GraphEosStreamer.Deserializer
@@ -37,22 +38,21 @@ namespace GraphEosStreamer.Deserializer
         {
             try
             {
-                using (var reader = new BinaryReader(new MemoryStream(data, false)))
+                var reader = new BinaryBufferReader(data);
+                
+                if (VariantReaders.TryGetValue(type, out var variantReader))
                 {
-                    if (VariantReaders.TryGetValue(type, out var variantReader))
-                    {
-                        var value = variantReader(reader);
-                        if (reader.BaseStream.Position != reader.BaseStream.Length && type != CommonTypes.TypeOfAbi)
-                            Log.Error(type.Name + " : reader has not read until end " + reader.BaseStream.Position + " of " + reader.BaseStream.Length);
-                        return value;
-                    }
-                    else
-                    {
-                        var value = GetTypeReader(type)(reader, type);
-                        if (reader.BaseStream.Position != reader.BaseStream.Length && type != CommonTypes.TypeOfAbi)
-                            Log.Error(type.Name + " : reader has not read until end " + reader.BaseStream.Position + " of " + reader.BaseStream.Length);
-                        return value;
-                    }
+                    var value = variantReader(reader);
+                    if (reader.Position != data.Length && type != CommonTypes.TypeOfAbi)
+                        Log.Error(type.Name + " : reader has not read until end " + reader.Position + " of " + data.Length);
+                    return value;
+                }
+                else
+                {
+                    var value = GetTypeReader(type)(reader, type);
+                    if (reader.Position != data.Length && type != CommonTypes.TypeOfAbi)
+                        Log.Error(type.Name + " : reader has not read until end " + reader.Position + " of " + data.Length);
+                    return value;
                 }
             }
             catch (EndOfStreamException)
@@ -68,7 +68,7 @@ namespace GraphEosStreamer.Deserializer
             return null;
         }
 
-        public static object ReadReferenceType(BinaryReader binaryReader, Type type)
+        public static object ReadReferenceType(BinaryBufferReader binaryReader, Type type)
         {
             var obj = Activator.CreateInstance(type);
             var objRef =__makeref(obj);
@@ -170,23 +170,23 @@ namespace GraphEosStreamer.Deserializer
             return typeReader;
         }
 
-        private delegate object ReaderDelegate(BinaryReader binaryReader, Type fieldType);
-        private delegate object VariantReaderDelegate(BinaryReader binaryReader);
+        private delegate object ReaderDelegate(BinaryBufferReader binaryReader, Type fieldType);
+        private delegate object VariantReaderDelegate(BinaryBufferReader binaryReader);
 
 
-        private static object ReadOptional(BinaryReader binaryReader, Type fieldType, ReaderDelegate typeReader)
+        private static object ReadOptional(BinaryBufferReader binaryReader, Type fieldType, ReaderDelegate typeReader)
         {
             var isValue = binaryReader.ReadByte();
             return isValue == 0 ? null : typeReader(binaryReader, fieldType);
         }
 
-        private static object ReadOptional(BinaryReader binaryReader, VariantReaderDelegate variantReader)
+        private static object ReadOptional(BinaryBufferReader binaryReader, VariantReaderDelegate variantReader)
         {
             var isValue = binaryReader.ReadByte();
             return isValue == 0 ? null : variantReader(binaryReader);
         }
 
-        private static object ReadArray(BinaryReader binaryReader, Type fieldType)
+        private static object ReadArray(BinaryBufferReader binaryReader, Type fieldType)
         {
             var elementType = fieldType.GetElementType();
             var size = Convert.ToInt32(binaryReader.ReadVarUint32());
@@ -218,7 +218,7 @@ namespace GraphEosStreamer.Deserializer
             return null;
         }
 
-        private static object ReadGeneric(BinaryReader binaryReader, Type fieldType)
+        private static object ReadGeneric(BinaryBufferReader binaryReader, Type fieldType)
         {
             var genericType = fieldType.GetGenericTypeDefinition();
             var genericArgs = fieldType.GetGenericArguments();
@@ -267,7 +267,6 @@ namespace GraphEosStreamer.Deserializer
             {CommonTypes.TypeOfBoolean, (reader, _) => reader.ReadBoolean() },
             {CommonTypes.TypeOfByte, (reader, _) => reader.ReadByte() },
             {CommonTypes.TypeOfSbyte, (reader, _) => reader.ReadSByte() },
-            {CommonTypes.TypeOfChar, (reader, _) => reader.ReadChar() },
             {CommonTypes.TypeOfDecimal, (reader, _) => reader.ReadDecimal()},
             {CommonTypes.TypeOfFloat, (reader, _) => reader.ReadFloat32()},
             {CommonTypes.TypeOfDouble, (reader, _) => reader.ReadFloat64()},
@@ -347,7 +346,7 @@ namespace GraphEosStreamer.Deserializer
 
         #region Variants
 
-        public static TransactionVariant ReadTransactionVariant(BinaryReader reader)
+        public static TransactionVariant ReadTransactionVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             return i switch
@@ -358,7 +357,7 @@ namespace GraphEosStreamer.Deserializer
             };
         }
 
-        public static TransactionTrace ReadTransactionTraceVariant(BinaryReader reader)
+        public static TransactionTrace ReadTransactionTraceVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -366,7 +365,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("TransactionTrace VariantType unknown");
         }
 
-        public static TableDelta ReadTableDeltaVariant(BinaryReader reader)
+        public static TableDelta ReadTableDeltaVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -374,7 +373,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("TableDelta VariantType unknown");
         }
 
-        public static ActionTrace ReadActionTraceVariant(BinaryReader reader)
+        public static ActionTrace ReadActionTraceVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -382,7 +381,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ActionTrace VariantType unknown");
         }
 
-        public static PartialTransaction ReadPartialTransactionVariant(BinaryReader reader)
+        public static PartialTransaction ReadPartialTransactionVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -390,7 +389,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("PartialTransaction VariantType unknown");
         }
 
-        public static ActionReceipt ReadActionReceiptVariant(BinaryReader reader)
+        public static ActionReceipt ReadActionReceiptVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -398,7 +397,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ActionReceipt VariantType unknown");
         }
 
-        public static Request ReadRequestVariant(BinaryReader reader)
+        public static Request ReadRequestVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             return i switch
@@ -410,7 +409,7 @@ namespace GraphEosStreamer.Deserializer
             };
         }
 
-        public static Result ReadResultVariant(BinaryReader reader)
+        public static Result ReadResultVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             return i switch
@@ -421,7 +420,7 @@ namespace GraphEosStreamer.Deserializer
             };
         }
 
-        public static Account ReadAccountVariant(BinaryReader reader)
+        public static Account ReadAccountVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -429,7 +428,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("Account VariantType unknown");
         }
 
-        public static AccountMetadata ReadAccountMetadataVariant(BinaryReader reader)
+        public static AccountMetadata ReadAccountMetadataVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -437,7 +436,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("AccountMetadata VariantType unknown");
         }
 
-        public static Code ReadCodeVariant(BinaryReader reader)
+        public static Code ReadCodeVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -445,7 +444,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("Code VariantType unknown");
         }
 
-        public static ContractTable ReadContractTableVariant(BinaryReader reader)
+        public static ContractTable ReadContractTableVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -453,7 +452,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ContractTable VariantType unknown");
         }
 
-        public static ContractRow ReadContractRowVariant(BinaryReader reader)
+        public static ContractRow ReadContractRowVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -461,7 +460,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ContractRow VariantType unknown");
         }
 
-        public static ContractIndexDouble ReadContractIndexDoubleVariant(BinaryReader reader)
+        public static ContractIndexDouble ReadContractIndexDoubleVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -469,7 +468,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ContractIndexDouble VariantType unknown");
         }
 
-        public static ChainConfig ReadChainConfigVariant(BinaryReader reader)
+        public static ChainConfig ReadChainConfigVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -477,7 +476,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ChainConfig VariantType unknown");
         }
 
-        public static GlobalProperty ReadGlobalPropertyVariant(BinaryReader reader)
+        public static GlobalProperty ReadGlobalPropertyVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             return i switch
@@ -488,7 +487,7 @@ namespace GraphEosStreamer.Deserializer
             };
         }
 
-        public static ActivatedProtocolFeature ReadActivatedProtocolFeatureVariant(BinaryReader reader)
+        public static ActivatedProtocolFeature ReadActivatedProtocolFeatureVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -496,7 +495,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ActivatedProtocolFeature VariantType unknown");
         }
 
-        public static ProtocolState ReadProtocolStateVariant(BinaryReader reader)
+        public static ProtocolState ReadProtocolStateVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -504,7 +503,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ProtocolState VariantType unknown");
         }
 
-        public static Permission ReadPermissionVariant(BinaryReader reader)
+        public static Permission ReadPermissionVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -512,7 +511,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("Permission VariantType unknown");
         }
 
-        public static PermissionLink ReadPermissionLinkVariant(BinaryReader reader)
+        public static PermissionLink ReadPermissionLinkVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -520,7 +519,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("PermissionLink VariantType unknown");
         }
 
-        public static GeneratedTransaction ReadGeneratedTransactionVariant(BinaryReader reader)
+        public static GeneratedTransaction ReadGeneratedTransactionVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -528,7 +527,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("GeneratedTransaction VariantType unknown");
         }
 
-        public static ContractIndex64 ReadContractIndex64Variant(BinaryReader reader)
+        public static ContractIndex64 ReadContractIndex64Variant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -536,7 +535,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ContractIndex64 VariantType unknown");
         }
 
-        public static ContractIndex256 ReadContractIndex256Variant(BinaryReader reader)
+        public static ContractIndex256 ReadContractIndex256Variant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -544,7 +543,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ContractIndex256 VariantType unknown");
         }
 
-        public static ContractIndex128 ReadContractIndex128Variant(BinaryReader reader)
+        public static ContractIndex128 ReadContractIndex128Variant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -552,7 +551,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ContractIndex128 VariantType unknown");
         }
 
-        public static ContractIndexLongDouble ReadContractIndexLongDoubleVariant(BinaryReader reader)
+        public static ContractIndexLongDouble ReadContractIndexLongDoubleVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -562,56 +561,53 @@ namespace GraphEosStreamer.Deserializer
 
         public static object ReadRowData(byte[] data, string rowType)
         {
-            using (var reader = new BinaryReader(new MemoryStream(data, false)))
+            switch (rowType)
             {
-                switch (rowType)
-                {
-                    case "resource_usage":
-                        return (ResourceUsage)Deserialize(data, CommonTypes.TypeOfResourceUsageVariant);
-                    case "resource_limits_state":
-                        return (ResourceLimitsState)Deserialize(data, CommonTypes.TypeOfResourceLimitsStateVariant);
-                    case "resource_limits_config":
-                        return (ResourceLimitsConfig)Deserialize(data, CommonTypes.TypeOfResourceLimitsConfigVariant);
-                    case "account":
-                        return (Account)Deserialize(data, CommonTypes.TypeOfAccountVariant);
-                    case "account_metadata":
-                        return (AccountMetadata)Deserialize(data, CommonTypes.TypeOfAccountMetadataVariant);
-                    case "code":
-                        return (Code)Deserialize(data, CommonTypes.TypeOfCodeVariant);
-                    case "contract_table":
-                        return (ContractTable)Deserialize(data, CommonTypes.TypeOfContractTableVariant);
-                    case "contract_row":
-                        return (ContractRow)Deserialize(data, CommonTypes.TypeOfContractRowVariant);
-                    case "permission": 
-                        return (Permission)Deserialize(data, CommonTypes.TypeOfPermissionVariant);
-                    case "permission_link":
-                        return (PermissionLink) Deserialize(data, CommonTypes.TypeOfPermissionLinkVariant);
-                    case "resource_limits":
-                        return (ResourceLimits)Deserialize(data, CommonTypes.TypeOfResourceLimitsVariant);
-                    case "global_property":
-                        return (GlobalProperty)Deserialize(data, CommonTypes.TypeOfGlobalPropertyVariant);
-                    case "contract_index64":
-                        return (ContractIndex64)Deserialize(data, CommonTypes.TypeOfContractIndex64Variant);
-                    case "contract_index128":
-                        return (ContractIndex128)Deserialize(data, CommonTypes.TypeOfContractIndex128Variant);
-                    case "contract_index256":
-                        return (ContractIndex256)Deserialize(data, CommonTypes.TypeOfContractIndex256Variant);
-                    case "contract_index_double":
-                        return (ContractIndexDouble)Deserialize(data, CommonTypes.TypeOfContractIndexDoubleVariant);
-                    case "contract_index_long_double":
-                        return (ContractIndexLongDouble)Deserialize(data, CommonTypes.TypeOfContractIndexLongDoubleVariant);
-                    case "generated_transaction":
-                        return (GeneratedTransaction)Deserialize(data, CommonTypes.TypeOfGeneratedTransactionVariant);
-                    case "protocol_state":
-                        return (ProtocolState)Deserialize(data, CommonTypes.TypeOfProtocolStateVariant);
-                    default:
-                        throw new Exception($"RowType {rowType.ToString()} unknown");
-                }
+                case "resource_usage":
+                    return (ResourceUsage)Deserialize(data, CommonTypes.TypeOfResourceUsageVariant);
+                case "resource_limits_state":
+                    return (ResourceLimitsState)Deserialize(data, CommonTypes.TypeOfResourceLimitsStateVariant);
+                case "resource_limits_config":
+                    return (ResourceLimitsConfig)Deserialize(data, CommonTypes.TypeOfResourceLimitsConfigVariant);
+                case "account":
+                    return (Account)Deserialize(data, CommonTypes.TypeOfAccountVariant);
+                case "account_metadata":
+                    return (AccountMetadata)Deserialize(data, CommonTypes.TypeOfAccountMetadataVariant);
+                case "code":
+                    return (Code)Deserialize(data, CommonTypes.TypeOfCodeVariant);
+                case "contract_table":
+                    return (ContractTable)Deserialize(data, CommonTypes.TypeOfContractTableVariant);
+                case "contract_row":
+                    return (ContractRow)Deserialize(data, CommonTypes.TypeOfContractRowVariant);
+                case "permission": 
+                    return (Permission)Deserialize(data, CommonTypes.TypeOfPermissionVariant);
+                case "permission_link":
+                    return (PermissionLink) Deserialize(data, CommonTypes.TypeOfPermissionLinkVariant);
+                case "resource_limits":
+                    return (ResourceLimits)Deserialize(data, CommonTypes.TypeOfResourceLimitsVariant);
+                case "global_property":
+                    return (GlobalProperty)Deserialize(data, CommonTypes.TypeOfGlobalPropertyVariant);
+                case "contract_index64":
+                    return (ContractIndex64)Deserialize(data, CommonTypes.TypeOfContractIndex64Variant);
+                case "contract_index128":
+                    return (ContractIndex128)Deserialize(data, CommonTypes.TypeOfContractIndex128Variant);
+                case "contract_index256":
+                    return (ContractIndex256)Deserialize(data, CommonTypes.TypeOfContractIndex256Variant);
+                case "contract_index_double":
+                    return (ContractIndexDouble)Deserialize(data, CommonTypes.TypeOfContractIndexDoubleVariant);
+                case "contract_index_long_double":
+                    return (ContractIndexLongDouble)Deserialize(data, CommonTypes.TypeOfContractIndexLongDoubleVariant);
+                case "generated_transaction":
+                    return (GeneratedTransaction)Deserialize(data, CommonTypes.TypeOfGeneratedTransactionVariant);
+                case "protocol_state":
+                    return (ProtocolState)Deserialize(data, CommonTypes.TypeOfProtocolStateVariant);
+                default:
+                    throw new Exception($"RowType {rowType.ToString()} unknown");
             }
         }
         
 
-        public static ResourceLimits ReadResourceLimitsVariant(BinaryReader reader)
+        public static ResourceLimits ReadResourceLimitsVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -619,7 +615,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ResourceLimits VariantType unknown");
         }
 
-        public static UsageAccumulator ReadUsageAccumulatorVariant(BinaryReader reader)
+        public static UsageAccumulator ReadUsageAccumulatorVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -627,7 +623,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("UsageAccumulator VariantType unknown");
         }
 
-        public static ResourceUsage ReadResourceUsageVariant(BinaryReader reader)
+        public static ResourceUsage ReadResourceUsageVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -635,7 +631,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ResourceUsage VariantType unknown");
         }
 
-        public static ResourceLimitsState ReadResourceLimitsStateVariant(BinaryReader reader)
+        public static ResourceLimitsState ReadResourceLimitsStateVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -643,7 +639,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ResourceLimitsState VariantType unknown");
         }
 
-        public static ResourceLimitsRatio ReadResourceLimitsRatioVariant(BinaryReader reader)
+        public static ResourceLimitsRatio ReadResourceLimitsRatioVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -651,7 +647,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ResourceLimitsRatio VariantType unknown");
         }
 
-        public static ElasticLimitParameters ReadElasticLimitParametersVariant(BinaryReader reader)
+        public static ElasticLimitParameters ReadElasticLimitParametersVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -659,7 +655,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ElasticLimitParameters VariantType unknown");
         }
 
-        public static ResourceLimitsConfig ReadResourceLimitsConfigVariant(BinaryReader reader)
+        public static ResourceLimitsConfig ReadResourceLimitsConfigVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)
@@ -667,7 +663,7 @@ namespace GraphEosStreamer.Deserializer
             throw new Exception("ResourceLimitsConfig VariantType unknown");
         }
 
-        public static BlockSigningAuthority ReadBlockSigningAuthorityVariant(BinaryReader reader)
+        public static BlockSigningAuthority ReadBlockSigningAuthorityVariant(BinaryBufferReader reader)
         {
             var i = Convert.ToInt32(reader.ReadVarUint32());
             if (i == 0)

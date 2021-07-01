@@ -7,11 +7,12 @@ using GraphEosStreamer.Other;
 using GraphEosStreamer.SHiP;
 using GraphEosStreamer.SHiP.EosTypes;
 using GraphEosStreamer.SHiP.Variants;
+using Salar.BinaryBuffers;
 using Serilog;
 
 namespace GraphEosStreamer.Deserializer
 {
-    public static class BinaryReaderExtensions
+    public static class BinaryBufferReaderExtensions
     {
         internal static class Constants
         {
@@ -27,7 +28,7 @@ namespace GraphEosStreamer.Deserializer
 
         #region EosTypes
 
-        public static Signature ReadSignature(this BinaryReader reader)
+        public static Signature ReadSignature(this BinaryBufferReader reader)
         {
             var type = reader.ReadByte();
             var signBytes = reader.ReadBytes(Constants.SignKeyDataSize);
@@ -46,22 +47,22 @@ namespace GraphEosStreamer.Deserializer
             }
         }
 
-        public static Checksum160 ReadChecksum160(this BinaryReader reader)
+        public static Checksum160 ReadChecksum160(this BinaryBufferReader reader)
         {
             return ByteArrayToHexString(reader.ReadBytes(20));
         }
 
-        public static Checksum256 ReadChecksum256(this BinaryReader reader)
+        public static Checksum256 ReadChecksum256(this BinaryBufferReader reader)
         {
             return ByteArrayToHexString(reader.ReadBytes(32));
         }
 
-        public static Checksum512 ReadChecksum512(this BinaryReader reader)
+        public static Checksum512 ReadChecksum512(this BinaryBufferReader reader)
         {
             return ByteArrayToHexString(reader.ReadBytes(64));
         }
 
-        public static VarUint32 ReadVarUint32(this BinaryReader reader)
+        public static VarUint32 ReadVarUint32(this BinaryBufferReader reader)
         {
             uint v = 0;
             var bit = 0;
@@ -78,32 +79,32 @@ namespace GraphEosStreamer.Deserializer
 //            return Convert.ToUInt32(reader.Read7BitEncodedInt());
         }
 
-        public static VarInt32 ReadVarInt32(this BinaryReader reader)
+        public static VarInt32 ReadVarInt32(this BinaryBufferReader reader)
         {
             return reader.Read7BitEncodedInt();
         }
 
-        public static VarUint64 ReadVarUint64(this BinaryReader reader)
+        public static VarUint64 ReadVarUint64(this BinaryBufferReader reader)
         {
             return (ulong)reader.Read7BitEncodedInt64();
         }
 
-        public static VarInt64 ReadVarInt64(this BinaryReader reader)
+        public static VarInt64 ReadVarInt64(this BinaryBufferReader reader)
         {
             return reader.Read7BitEncodedInt64();
         }
 
-        public static Uint128 ReadUInt128(this BinaryReader reader)
+        public static Uint128 ReadUInt128(this BinaryBufferReader reader)
         {
             return reader.ReadBytes(16);
         }
 
-        public static Int128 ReadInt128(this BinaryReader reader)
+        public static Int128 ReadInt128(this BinaryBufferReader reader)
         {
             return reader.ReadBytes(8);
         }
 
-        public static Name ReadNameOld(this BinaryReader reader)
+        public static Name ReadNameOld(this BinaryBufferReader reader)
         {
             var a = reader.ReadBytes(8);
             var result = "";
@@ -137,22 +138,20 @@ namespace GraphEosStreamer.Deserializer
             return new Name(Convert.ToUInt64(a), result);
         }
 
-        private static readonly char[] Charmap = new []{ '.','1','2','3','4','5','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z' };
+        private static readonly char[] CharMap = new []{ '.','1','2','3','4','5','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z' };
 
-        public static Name ReadName(this BinaryReader reader)
+        public static Name ReadName(this BinaryBufferReader reader)
         {
             var binary = reader.ReadUInt64();
 
             var str = new[] {'.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.'};
 
-            ulong test;
             try
             {
                 var tmp = binary;
                 for (uint i = 0; i <= 12; ++i)
                 {
-                    test = tmp & (ulong) (i == 0 ? 0x0f : 0x1f);
-                    var c = Charmap[test];
+                    var c = CharMap[tmp & (ulong)(i == 0 ? 0x0f : 0x1f)];
                     str[(int) (12 - i)] = c;
                     tmp >>= (i == 0 ? 4 : 5);
                 }
@@ -165,19 +164,19 @@ namespace GraphEosStreamer.Deserializer
             return new Name(binary, new string(str).TrimEnd('.'));
         }
 
-        public static string ReadEosString(this BinaryReader reader)
+        public static string ReadEosString(this BinaryBufferReader reader)
         {
             var length = Convert.ToInt32(reader.ReadVarUint32());
             return length > 0 ? Encoding.UTF8.GetString(reader.ReadBytes(length)) : null;
         }
 
-        public static Bytes ReadBytes(this BinaryReader reader)
+        public static Bytes ReadBytes(this BinaryBufferReader reader)
         {
             var length = Convert.ToInt32(reader.ReadVarUint32());
             return reader.ReadBytes(length);
         }
 
-        public static PublicKey ReadPublicKey(this BinaryReader reader)
+        public static PublicKey ReadPublicKey(this BinaryBufferReader reader)
         {
             var type = reader.ReadByte();
             var keyBytes = reader.ReadBytes(Constants.PubKeyDataSize);
@@ -196,37 +195,37 @@ namespace GraphEosStreamer.Deserializer
         }
         #endregion EosTypes
 
-        public static TracesBytes ReadTracesBytes(this BinaryReader reader)
+        public static TracesBytes ReadTracesBytes(this BinaryBufferReader reader)
         {
             var length = Convert.ToInt32(reader.ReadVarUint32());
             return new TracesBytes(reader.ReadBytes(length));
         }
 
-        public static DeltasBytes ReadDeltasBytes(this BinaryReader reader)
+        public static DeltasBytes ReadDeltasBytes(this BinaryBufferReader reader)
         {
             var length = Convert.ToInt32(reader.ReadVarUint32());
             return new DeltasBytes(reader.ReadBytes(length));
         }
 
-        public static BlockBytes ReadBlockBytes(this BinaryReader reader)
+        public static BlockBytes ReadBlockBytes(this BinaryBufferReader reader)
         {
             var length = Convert.ToInt32(reader.ReadVarUint32());
             return new BlockBytes(reader.ReadBytes(length));
         }
 
-        public static ContractRowBytes ReadContractRowBytes(this BinaryReader reader)
+        public static ContractRowBytes ReadContractRowBytes(this BinaryBufferReader reader)
         {
             var length = Convert.ToInt32(reader.ReadVarUint32());
             return new ContractRowBytes(reader.ReadBytes(length));
         }
 
-        public static ActionBytes ReadActionBytes(this BinaryReader reader)
+        public static ActionBytes ReadActionBytes(this BinaryBufferReader reader)
         {
             var length = Convert.ToInt32(reader.ReadVarUint32());
             return new ActionBytes(reader.ReadBytes(length));
         }
 
-        public static PackedTransactionBytes ReadPackedTransactionBytes(this BinaryReader reader)
+        public static PackedTransactionBytes ReadPackedTransactionBytes(this BinaryBufferReader reader)
         {
             var length = Convert.ToInt32(reader.ReadVarUint32());
             return new PackedTransactionBytes(reader.ReadBytes(length));
@@ -247,22 +246,22 @@ namespace GraphEosStreamer.Deserializer
             return hex.ToString();
         }
 
-        public static float ReadFloat32(this BinaryReader reader)
+        public static float ReadFloat32(this BinaryBufferReader reader)
         {
             return BitConverter.ToSingle(reader.ReadBytes(4));
         }
 
-        public static double ReadFloat64(this BinaryReader reader)
+        public static double ReadFloat64(this BinaryBufferReader reader)
         {
             return BitConverter.ToDouble(reader.ReadBytes(8));
         }
 
-        public static Float128 ReadFloat128(this BinaryReader reader)
+        public static Float128 ReadFloat128(this BinaryBufferReader reader)
         {
             return reader.ReadBytes(16);
         }
 
-        public static Asset ReadAsset(this BinaryReader reader)
+        public static Asset ReadAsset(this BinaryBufferReader reader)
         {
             var binaryAmount = reader.ReadBytes(8);
 
@@ -275,7 +274,7 @@ namespace GraphEosStreamer.Deserializer
             return new Asset(){Symbol = symbol, Amount = amount, };
         }
 
-        public static Symbol ReadSymbol(this BinaryReader reader)
+        public static Symbol ReadSymbol(this BinaryBufferReader reader)
         {
             var value = new Symbol()
             {
@@ -294,7 +293,7 @@ namespace GraphEosStreamer.Deserializer
             return value;
         }
 
-        public static SymbolCode ReadSymbolCode(this BinaryReader reader)
+        public static SymbolCode ReadSymbolCode(this BinaryBufferReader reader)
         {
             var a = reader.ReadBytes(8);
 
@@ -306,5 +305,98 @@ namespace GraphEosStreamer.Deserializer
             return new SymbolCode() {Value = string.Join("", a.Take(len))};
         }
 
+        public static int Read7BitEncodedInt(this BinaryBufferReader reader)
+        {
+            /*
+             * Copied from Microsofts BinaryReader Source-Code
+             */
+
+            // Unlike writing, we can't delegate to the 64-bit read on
+            // 64-bit platforms. The reason for this is that we want to
+            // stop consuming bytes if we encounter an integer overflow.
+
+            uint result = 0;
+            byte byteReadJustNow;
+
+            // Read the integer 7 bits at a time. The high bit
+            // of the byte when on means to continue reading more bytes.
+            //
+            // There are two failure cases: we've read more than 5 bytes,
+            // or the fifth byte is about to cause integer overflow.
+            // This means that we can read the first 4 bytes without
+            // worrying about integer overflow.
+
+            const int MaxBytesWithoutOverflow = 4;
+            for (int shift = 0; shift < MaxBytesWithoutOverflow * 7; shift += 7)
+            {
+                // ReadByte handles end of stream cases for us.
+                byteReadJustNow = reader.ReadByte();
+                result |= (byteReadJustNow & 0x7Fu) << shift;
+
+                if (byteReadJustNow <= 0x7Fu)
+                {
+                    return (int)result; // early exit
+                }
+            }
+
+            // Read the 5th byte. Since we already read 28 bits,
+            // the value of this byte must fit within 4 bits (32 - 28),
+            // and it must not have the high bit set.
+
+            byteReadJustNow = reader.ReadByte();
+            if (byteReadJustNow > 0b_1111u)
+            {
+                throw new FormatException("Format_Bad7BitInt");
+            }
+
+            result |= (uint)byteReadJustNow << (MaxBytesWithoutOverflow * 7);
+            return (int)result;
+
+        }
+
+        public static long Read7BitEncodedInt64(this BinaryBufferReader reader)
+        {
+            /*
+             * Copied from Microsofts BinaryReader Source-Code
+             */
+
+            ulong result = 0;
+            byte byteReadJustNow;
+
+            // Read the integer 7 bits at a time. The high bit
+            // of the byte when on means to continue reading more bytes.
+            //
+            // There are two failure cases: we've read more than 10 bytes,
+            // or the tenth byte is about to cause integer overflow.
+            // This means that we can read the first 9 bytes without
+            // worrying about integer overflow.
+
+            const int MaxBytesWithoutOverflow = 9;
+            for (int shift = 0; shift < MaxBytesWithoutOverflow * 7; shift += 7)
+            {
+                // ReadByte handles end of stream cases for us.
+                byteReadJustNow = reader.ReadByte();
+                result |= (byteReadJustNow & 0x7Ful) << shift;
+
+                if (byteReadJustNow <= 0x7Fu)
+                {
+                    return (long)result; // early exit
+                }
+            }
+
+            // Read the 10th byte. Since we already read 63 bits,
+            // the value of this byte must fit within 1 bit (64 - 63),
+            // and it must not have the high bit set.
+
+            byteReadJustNow = reader.ReadByte();
+            if (byteReadJustNow > 0b_1u)
+            {
+                throw new FormatException("Format_Bad7BitInt");
+            }
+
+            result |= (ulong)byteReadJustNow << (MaxBytesWithoutOverflow * 7);
+            return (long)result;
+
+        }
     }
 }
