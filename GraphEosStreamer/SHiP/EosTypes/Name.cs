@@ -34,7 +34,6 @@
             _binary = binary;
         }
 
-
         public override bool Equals(object obj)
         {
             if (obj is not Name item)
@@ -45,9 +44,21 @@
             return this._binary.Equals(item._binary) || _value.Equals(item._value);
         }
 
+        public static bool operator == (Name obj1, Name obj2)
+        {
+            return obj1?._binary == obj2?._binary;
+        }
+
+        public static bool operator != (Name obj1, Name obj2)
+        {
+            return obj1?._binary != obj2?._binary;
+        }
+
         public override int GetHashCode()
         {
             return this._binary.GetHashCode();
         }
+
+
     }
 }

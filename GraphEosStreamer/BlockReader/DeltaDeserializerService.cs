@@ -18,6 +18,7 @@ namespace GraphEosStreamer.BlockReader
     public class DeltaDeserializerService : BackgroundService
     {
         private readonly ChannelReader<GetBlocksResultV0> _blocksResultChannel;
+        private readonly ChannelWriter<DeserializedGetBlocksResultV0> _deserializedBlocksResultChannel;
 
         private readonly IBlockStream _blockStream;
 
@@ -26,16 +27,18 @@ namespace GraphEosStreamer.BlockReader
         private readonly SortedSet<string> _ignoreContracts;
 
         private readonly int _deltaDeserializerTasks;
-        private bool _streamBlocks;
+        private bool _mergeDeltas;
 
-        public DeltaDeserializerService(ChannelReader<GetBlocksResultV0> blocksResultChannel, IBlockStream blockStream,
+        public DeltaDeserializerService(ChannelReader<GetBlocksResultV0> blocksResultChannel,
+            ChannelWriter<DeserializedGetBlocksResultV0> deserializedBlocksResultChannel, IBlockStream blockStream,
             IOptionsMonitor<Options> optionsMonitor)
         {
             _options = optionsMonitor.CurrentValue;
             _ignoreContracts = _options.IgnoreContracts ?? new SortedSet<string>();
-            _streamBlocks = _options.StreamBlocks;
+            _mergeDeltas = _options.MergeDeltas;
 
             _blocksResultChannel = blocksResultChannel;
+            _deserializedBlocksResultChannel = deserializedBlocksResultChannel;
             _blockStream = blockStream;
             _deltaDeserializerTasks = _options.DeltaDeserializerTasks;
 
@@ -44,7 +47,7 @@ namespace GraphEosStreamer.BlockReader
 
         private void OnOptionsChanged(Options options)
         {
-            _streamBlocks = options.StreamBlocks;
+            _mergeDeltas = options.MergeDeltas;
         }
 
         protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -163,8 +166,10 @@ namespace GraphEosStreamer.BlockReader
                     if(getBlocksResultV0.ThisBlock?.BlockNum % 50000 == 0)
                         Log.Information("task" + taskNum + " fully deserialized Block " + getBlocksResultV0.ThisBlock?.BlockNum + " at " + DateTime.Now.ToLongTimeString() + "            Traces:" + getBlocksResultV0.TracesBytes?.Instance?.Length + " ,Deltas:" + getBlocksResultV0.DeltasBytes?.Instance?.Length);
 
-                    if(_streamBlocks)
+                    if(_mergeDeltas)
                         _blockStream.AddBlock(new Block(getBlocksResultV0));
+
+                    await _deserializedBlocksResultChannel.WriteAsync(new DeserializedGetBlocksResultV0(getBlocksResultV0), clt);
                 }
                 catch (Exception e)
                 {

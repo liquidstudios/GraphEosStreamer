@@ -18,5 +18,6 @@ namespace GraphEosStreamer
         public SortedSet<string> IgnoreContracts { get; set; }
 
         public bool StreamBlocks { get; set; }
+        public bool MergeDeltas { get; set; }
     }
 }
